@@ -7,6 +7,9 @@ import {MessageError} from '../../errors.js';
 import {registries} from '../../resolvers/index.js';
 import * as fs from '../../util/fs.js';
 import map from '../../util/map.js';
+import {install} from './install';
+
+import Lockfile from '../../lockfile';
 
 const leven = require('leven');
 const path = require('path');
@@ -76,12 +79,21 @@ export async function run(config: Config, reporter: Reporter, flags: Object, arg
     }
 
     if (cmds.length) {
+      const runInstall = config.getOption('install-before-run');
+      if (runInstall) {
+        const lockfile = await Lockfile.fromDirectory(config.lockfileFolder, reporter);
+
+        await install(config, reporter, flags, lockfile);
+      }
+
       // Disable wrapper in executed commands
       process.env.YARN_WRAP_OUTPUT = 'false';
       for (const [stage, cmd] of cmds) {
         // only tack on trailing arguments for default script, ignore for pre and post - #1595
         const cmdWithArgs = stage === action ? sh`${unquoted(cmd)} ${args}` : cmd;
         const customShell = config.getOption('script-shell');
+
+        // prettier-ignore
         await execCommand({
           stage,
           config,
